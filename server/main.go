@@ -40,21 +40,34 @@ func hello(c *gin.Context) {
 		return
 	}
 
+	for {
+		aiResponse, err := getResponse(newChatMessage)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		c.JSON(200, gin.H{"response": aiResponse})
+		return
+	}
+}
+
+func getResponse(newChatMessage request) (*response, error) {
 	res, err := getAiResponse(newChatMessage.Text, newChatMessage.Context)
 	if err != nil {
 		log.Printf("error: %s", err.Error())
-		return
-	}
-
-	aiResponse, err := parseAiResponse(res)
-	if err != nil {
-		log.Printf("error: %s", err.Error())
-		return
+		return nil, err
 	}
 
 	log.Printf("response: %s", res["response"])
 
-	c.JSON(200, gin.H{"response": aiResponse})
+	aiResponse, err := parseAiResponse(res)
+	if err != nil {
+		log.Printf("error: %s", err.Error())
+		return nil, err
+	}
+
+	return aiResponse, nil
 }
 
 func parseAiResponse(data map[string]interface{}) (*response, error) {
@@ -90,8 +103,14 @@ func parseAiResponse(data map[string]interface{}) (*response, error) {
 	}
 
 	answers := strings.Split(answersRaw, "*")
+	var filteredAnswers []string
+	for _, answer := range answers {
+		if strings.TrimSpace(answer) != "" {
+			filteredAnswers = append(filteredAnswers, answer)
+		}
+	}
 
-	return &response{Context: context, Thoughts: thoughts, Question: question, Answers: answers}, nil
+	return &response{Context: context, Thoughts: thoughts, Question: question, Answers: filteredAnswers}, nil
 }
 
 func getAiResponse(text string, context []int) (map[string]interface{}, error) {
@@ -102,6 +121,8 @@ Your task is to help users find new and unique coding projects. Use your creativ
 You have as many Questions as you need to find a good project idee.
 Once the user asks for a project idea you have to provide one!
 simple put the project ideas as a answer to the question "what project idea do you like?"
+
+start with broad question and than get more precise 
 
 Provide answers in a specific structure, separated into three sections, with each section clearly separated by a Header.
 The headers should be "**Thoughts**", "**Question**" and "**Answers**"
